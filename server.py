@@ -1,34 +1,37 @@
-from xmlrpc.server import SimpleXMLRPCServer
-from xmlrpc.server import SimpleXMLRPCRequestHandler
+#!/usr/bin/env python
+import pika
+
+parameters = pika.ConnectionParameters(host='localhost')
+connection = pika.BlockingConnection(parameters)
 
 
-# Restrict to a particular path.
-class RequestHandler(SimpleXMLRPCRequestHandler):
-    rpc_paths = ('/RPC2',)
+channel = connection.channel()
 
+channel.queue_declare(queue='rpc_queue', durable=True, arguments={'x-queue-type': 'quorum'})
 
-# Create server
-with SimpleXMLRPCServer(
-        ('localhost', 8000),
-        requestHandler=RequestHandler) as server:
+def fib(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fib(n - 1) + fib(n - 2)
 
-    server.register_introspection_functions()
+def on_request(ch, method, props, body):
+    n = int(body)
 
-    # Register a function under a different name
-    def adder_function(x, y):
-        return x + y
+    print(f" [.] fib({n})")
+    response = fib(n)
 
-    server.register_function(adder_function, 'add')
+    ch.basic_publish(exchange='',
+                     routing_key=props.reply_to,
+                     properties=pika.BasicProperties(correlation_id = \
+                                                         props.correlation_id),
+                     body=str(response))
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    # Register an instance
-    class MyFuncs:
+channel.basic_qos(prefetch_count=1)
+channel.basic_consume(queue='rpc_queue', on_message_callback=on_request)
 
-        def mul(self, x, y):
-            return x * y
-
-    server.register_instance(MyFuncs())
-
-    print("XML-RPC Server is running on port 8000...")
-
-    # Run the server's main loop
-    server.serve_forever()
+print(" [x] Awaiting RPC requests")
+channel.start_consuming()
