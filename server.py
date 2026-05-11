@@ -2,50 +2,33 @@ from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
 
 
-# Giới hạn đường dẫn RPC
+# Restrict to a particular path.
 class RequestHandler(SimpleXMLRPCRequestHandler):
     rpc_paths = ('/RPC2',)
 
 
-# Tạo XMLRPC Server
+# Create server
 with SimpleXMLRPCServer(
         ('localhost', 8000),
         requestHandler=RequestHandler) as server:
 
-    print("XML-RPC Server is running on port 8000...")
-
-    # Cho phép introspection functions
     server.register_introspection_functions()
 
-    # Hàm cộng
-    def add(x, y):
-        print(f"Client called add({x}, {y})")
+    # Register a function under a different name
+    def adder_function(x, y):
         return x + y
 
-    # Đăng ký hàm add
-    server.register_function(add, 'add')
+    server.register_function(adder_function, 'add')
 
-    # Class chứa các phương thức RPC
-    class MyFunctions:
+    # Register an instance
+    class MyFuncs:
 
         def mul(self, x, y):
-            print(f"Client called mul({x}, {y})")
             return x * y
 
-        def sub(self, x, y):
-            print(f"Client called sub({x}, {y})")
-            return x - y
+    server.register_instance(MyFuncs())
 
-        def div(self, x, y):
-            print(f"Client called div({x}, {y})")
+    print("XML-RPC Server is running on port 8000...")
 
-            if y == 0:
-                return "Cannot divide by zero"
-
-            return x / y
-
-    # Đăng ký instance
-    server.register_instance(MyFunctions())
-
-    # Chạy server
+    # Run the server's main loop
     server.serve_forever()
